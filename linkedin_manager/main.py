@@ -28,4 +28,6 @@ def post_text():
     r.raise_for_status()
     return r.json()
 
-post_text()
+
+if __name__ == '__main__':
+    updater = post_text()
