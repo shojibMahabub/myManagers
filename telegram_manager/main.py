@@ -1,46 +1,52 @@
-import asyncio
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, ContextTypes
+import ollama
 import os
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = os.getenv('TELEGRAM_MANAGER_BOT_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_MANAGER_BOT_CHAT_ID')
 
-# Callback for button presses
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+def send_request_to_ai(user_text):
+    model_name = 'llama3:latest'
 
-    if query.data == "approve":
-        await query.edit_message_text("✅ You approved this job!")
-        # TODO: trigger AI proposal generation here
-    elif query.data == "reject":
-        await query.edit_message_text("❌ You rejected this job!")
-
-# Function to send a job with buttons
-async def send_job(app, chat_id, job_title, job_link):
-    keyboard = [
-        [
-            InlineKeyboardButton("Approve ✅", callback_data="approve"),
-            InlineKeyboardButton("Reject ❌", callback_data="reject"),
-        ]
+    chat_history = [
+        {
+            'role': 'system',
+            'content': 'Your are a friend of the role user. You like to travel, '
+                       'you visited many countries'
+                       'You are very experienced and talented Astronaut, Software Engineer, Entrepreneur.'
+                       'You not only like to talk about work but also life.'
+                       'reply in random message length, dont send same length message every time'
+                       'reply text of the user in humanly nature, be humble, funny, act like a close friend.'
+        },
+        {
+            'role': 'user',
+            'content': user_text
+        }
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await app.bot.send_message(
-        chat_id=chat_id,
-        text=f"New Upwork job found:\n{job_title}\n{job_link}",
-        reply_markup=reply_markup
-    )
+
+    # Send the chat request to Ollama
+    try:
+        response = ollama.chat(model=model_name, messages=chat_history)
+        chat_history.append({'role': 'assistant', 'content': response['message']['content']})
+        return response['message']['content']
+
+    except Exception as e:
+        return f"An error occurred: {e}"
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text
+    try:
+        ai_reply = send_request_to_ai(user_text)
+    except Exception as e:
+        ai_reply = f"⚠️ Error contacting Ollama: {e}"
+
+    await update.message.reply_text(f"{ai_reply}")
+
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.run_polling()
 
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CallbackQueryHandler(button_handler))
-
-    # Send a test job once the bot starts
-    async def on_startup(app):
-        await send_job(app, CHAT_ID, "AI Developer Needed", "https://www.upwork.com/job-link")
-
-    app.post_init = on_startup
-
-    # Run the bot (polling)
-    app.run_polling()
+    main()
