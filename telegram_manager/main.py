@@ -7,7 +7,7 @@ BOT_TOKEN = os.getenv('TELEGRAM_MANAGER_BOT_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_MANAGER_BOT_CHAT_ID')
 
 def send_request_to_ai(user_text):
-    model_name = 'llama3:latest'
+    model_name = 'gemma3:4b'
 
     chat_history = [
         {
