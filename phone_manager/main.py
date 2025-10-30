@@ -1,34 +1,29 @@
-import google.auth
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+from google.oauth2 import service_account
+import os
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]  # or remove `.readonly` for write access
 
 
-def get_values(spreadsheet_id, range_name):
-  """
-  Creates the batch_update the user has access to.
-  Load pre-authorized user credentials from the environment.
-  TODO(developer) - See https://developers.google.com/identity
-  for guides on implementing OAuth2 for the application.
-  """
-  creds, _ = google.auth.default()
-  # pylint: disable=maybe-no-member
-  try:
-    service = build("sheets", "v4", credentials=creds)
+CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+credential_file = os.path.join(CURR_DIR, 'credentials.json')
 
-    result = (
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=spreadsheet_id, range=range_name)
-        .execute()
-    )
-    rows = result.get("values", [])
-    print(f"{len(rows)} rows retrieved")
-    return result
-  except HttpError as error:
-    print(f"An error occurred: {error}")
-    return error
+creds = service_account.Credentials.from_service_account_file(
+    credential_file,
+    scopes=SCOPES,
+)
 
+service = build("sheets", "v4", credentials=creds)
 
-if __name__ == "__main__":
-  # Pass: spreadsheet_id, and range_name
-  get_values("1822j1bguPxBnXb3VezRiKD6thQJ-QUEmvWn7mKwCtmY", "A1:C2")
+# Example: read a range
+SAMPLE_SPREADSHEET_ID = ""
+SAMPLE_RANGE_NAME = "Sheet1"
+
+result = (
+    service.spreadsheets()
+    .values()
+    .get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME)
+    .execute()
+)
+values = result.get("values", [])
+headers = values[0]

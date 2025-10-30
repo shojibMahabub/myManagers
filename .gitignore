@@ -1,3 +1,4 @@
-my_managers
 .idea
 manager_environment
+token.json
+phone_manager/credentials.json
