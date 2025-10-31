@@ -9,23 +9,11 @@ def connectGemini(user_text):
     return response.text
 
 
-def connectOllama(user_text):
-    model_name = 'gemma3:4b'
-
-    chat_history = [
-        {
-            'role': 'system',
-            'content': 'Your are a friend of the role user. Reply to the user in humanly nature.'
-        },
-        {
-            'role': 'user',
-            'content': user_text
-        }
-    ]
+def connectOllama(prompt):
+    model_name = 'llama3.1:latest'
 
     try:
-        response = ollama.chat(model=model_name, messages=chat_history)
-        chat_history.append({'role': 'assistant', 'content': response['message']['content']})
+        response = ollama.chat(model=model_name, messages=prompt)
         return response['message']['content']
 
     except Exception as e:
