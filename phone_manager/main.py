@@ -11,7 +11,7 @@ import json
 
 # === CONFIG ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-SHEET_ID = ""
+SHEET_ID = "1822j1bguPxBnXb3VezRiKD6thQJ-QUEmvWn7mKwCtmY"
 SHEET_RANGE = "Sheet1!A:Z"
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 CREDENTIAL_FILE = os.path.join(CURR_DIR, "credentials.json")
@@ -33,13 +33,19 @@ def init_db():
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date DATETIME,
-            bank TEXT,
+            institution TEXT,
             type TEXT,
             merchant TEXT,
+            debit_account TEXT,
             amount REAL,
             balance REAL,
             device TEXT,
-            raw_content TEXT
+            card_number TEXT,
+            total_due INTEGER,
+            minimum_due INTEGER,
+            due_date DATETIME,
+            raw_content TEXT,
+            reference_number TEXT
         )
     ''')
     conn.commit()
@@ -69,6 +75,17 @@ def parse_flexible_date(date_str):
     except Exception as e:
         debug_log(f"parse_flexible_date error: {e} | input: {date_str}")
     return None
+def parse_sms_type(content):
+    if re.search(r'\b(bill|client id|due date)\b', content, re.IGNORECASE):
+        return 'credit-card-bill'
+
+    if re.search(r'\b(client|due)\b', content, re.IGNORECASE):
+        return 'credit-card'
+
+
+
+    return None
+
 
 def connect_ollama(prompt):
     try:
@@ -81,16 +98,7 @@ def connect_ollama(prompt):
 
 def parse_ollama_response(ai_response):
     # Extract JSON-like string
-    match = re.search(r'```json(.*?)```', ai_response, re.DOTALL) or re.search(r'```(.*?)```', ai_response, re.DOTALL)
-    if not match:
-        return None
-
-    raw_json = match.group(1).strip()
-
-    try:
-        data = json.loads(raw_json.replace("// masked.*", ""))  # remove comments
-    except json.JSONDecodeError:
-        return None
+    raw_json = json.loads(ai_response)
 
     # Flatten nested fields
     def extract_amount(d):
@@ -133,36 +141,43 @@ def parse_ollama_response(ai_response):
         return None
 
     return {
-        "amount": extract_amount(data),
-        "balance": extract_balance(data),
-        "card_number": extract_card(data),
-        "date": extract_date(data)
+        "amount": extract_amount(raw_json),
+        "balance": extract_balance(raw_json),
+        "card_number": extract_card(raw_json),
+        "date": extract_date(raw_json)
     }
 
 
 def process_row(row, line_no):
     row = list(row) + [""]*(5 - len(row))
-    date_str, bank, _, content, device = row
-    sql_date = parse_flexible_date(date_str)
+    date, institution, _, content, device = row
 
-    prompt = f"Extract financial fields from this message as JSON-like string: \"\"\"{content}\"\"\""
-    response_text = connect_ollama(prompt)
-    debug_log(f"Line {line_no}: AI response: {response_text}")
+    parsed_data = {
+        "date": parse_flexible_date(date),
+        "institution": institution,
+        "type": parse_sms_type(content),
+        "merchant": "",
+        "debit_account": "",
+        "amount": "",
+        "balance": "",
+        "card_number": "",
+        "total_due": "",
+        "minimum_due": "",
+        "due_date": "",
+        "raw_content": content,
+        "reference_number": "",
+        "device": device,
+    }
 
-    txn_type, merchant, amount, balance = parse_ollama_response(response_text)
-
-    if "16216" in bank:
-        bank = "DUTCH BANGLA BANK"
-
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO transactions (date, bank, type, merchant, amount, balance, device, raw_content)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (sql_date, bank, txn_type, merchant, amount, balance, device, content))
-    conn.commit()
-    conn.close()
-    debug_log(f"Line {line_no}: Inserted {bank} | {txn_type} | {merchant} | {amount} | {balance}")
+    # conn = sqlite3.connect(DB_FILE)
+    # c = conn.cursor()
+    # c.execute('''
+    #     INSERT INTO transactions (date, bank, type, merchant, amount, balance, device, raw_content)
+    #     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    # ''', (sql_date, bank, txn_type, merchant, amount, balance, device, content))
+    # conn.commit()
+    # conn.close()
+    # debug_log(f"Line {line_no}: Inserted {bank} | {txn_type} | {merchant} | {amount} | {balance}")
 
 # === MAIN SYNC ===
 def sync_google_sheet():

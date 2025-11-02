@@ -4,4 +4,5 @@ token.json
 phone_manager/credentials.json
 phone_manager/data.csv
 phone_manager/sync_log.txt
+phone_manager/log.txt
 phone_manager/transactions.db
